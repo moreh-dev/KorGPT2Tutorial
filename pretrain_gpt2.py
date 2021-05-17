@@ -88,11 +88,12 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
 
 
 def set_seed(args):
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    ## FIXME
+    #random.seed(args.seed)
+    #np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    if args.n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
+    #if args.n_gpu > 0:
+    #    torch.cuda.manual_seed_all(args.seed)
 
 
 def _sorted_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -> List[str]:
@@ -209,9 +210,10 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
+    #FIXME
     # multi-gpu training (should be after apex fp16 initialization)
-    if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+    #if args.n_gpu > 1:
+    #    model = torch.nn.DataParallel(model)
 
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
@@ -248,9 +250,10 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
         epochs_trained, int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]
     )
     set_seed(args)  # Added here for reproducibility
-    for _ in train_iterator:
+    for i in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
+            print('  ## step = ', step)
 
             # Skip past any already trained steps if resuming training
             if steps_trained_in_current_epoch > 0:
@@ -264,8 +267,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
 
-            if args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            #if args.n_gpu > 1:
+            #    loss = loss.mean()  # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 
@@ -354,8 +357,8 @@ def evaluate(args, model, tokenizer, prefix="") -> Dict:
     )
 
     # multi-gpu evaluate
-    if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+    #if args.n_gpu > 1:
+    #    model = torch.nn.DataParallel(model)
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
@@ -514,6 +517,11 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
+
+    ## MOREH
+    parser.add_argument(
+        "--run_on_moreh", action="store_true", help="Whether to run on Moreh framework."
+    )
     args = parser.parse_args()
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"] and not args.mlm:
@@ -567,6 +575,11 @@ def main():
     args.device = device
     #args.device = "cpu"
 
+    if args.run_on_moreh:
+        args.device = 'cuda'
+        args.n_gpu = int(os.environ['MOREH_NUM_DEVICES'])
+    print('#num_gpu =', args.n_gpu)
+
     # Setup logging
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -589,7 +602,7 @@ def main():
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
 
-    config = GPT2Config(vocab_size=52000)
+    config = GPT2Config(vocab_size=52000, resid_pdrop=0.0, embd_pdrop=0.0, attn_pdrop=0.0)
     
     from new_tokenizer import MyTokenizer
     vocab_file_path = 'tokenizer/vocab.json'
@@ -604,6 +617,7 @@ def main():
         args.block_size = min(args.block_size, tokenizer.max_len)
     
     model = GPT2LMHeadModel(config)
+    print(model)
     if args.init_model:
         print("Load model from ", args.init_model)
         model.load_state_dict(torch.load(args.init_model), strict=False)
@@ -627,6 +641,7 @@ def main():
 
         global_step, tr_loss = train(args, train_dataset, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+        print(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Saving best-practices: if you use save_pretrained for the model and tokenizer, you can reload them using from_pretrained()
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
