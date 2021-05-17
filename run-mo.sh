@@ -1,0 +1,1 @@
+MOREH_NUM_DEVICES=1 python pretrain_gpt2.py --do_train --model_type=gpt2 --train_data_file=/home/share/dataset/GPT2/data.txt --num_train_epochs=1 --output_dir=extend_kogpt2_test.mo --overwrite_output_dir --run_on_moreh --per_gpu_train_batch_size=1

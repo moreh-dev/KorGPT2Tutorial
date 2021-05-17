@@ -1,0 +1,1 @@
+python pretrain_gpt2.py --do_train --model_type=gpt2 --train_data_file=/nas/share/dataset/GPT2/data.txt --num_train_epochs=1 --output_dir=extend_kogpt2_tes.nv --overwrite_output_dir
