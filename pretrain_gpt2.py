@@ -253,7 +253,6 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
     for i in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
-            print('  ## step = ', step)
 
             # Skip past any already trained steps if resuming training
             if steps_trained_in_current_epoch > 0:
@@ -297,8 +296,13 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                         results = evaluate(args, model, tokenizer)
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
+                            logger.info("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
+                    logger.info(
+                            f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
+                    logger.info(
+                            f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}')
                     logging_loss = tr_loss
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -578,7 +582,6 @@ def main():
     if args.run_on_moreh:
         args.device = 'cuda'
         args.n_gpu = int(os.environ['MOREH_NUM_DEVICES'])
-    print('#num_gpu =', args.n_gpu)
 
     # Setup logging
     logging.basicConfig(
@@ -617,7 +620,6 @@ def main():
         args.block_size = min(args.block_size, tokenizer.max_len)
     
     model = GPT2LMHeadModel(config)
-    print(model)
     if args.init_model:
         print("Load model from ", args.init_model)
         model.load_state_dict(torch.load(args.init_model), strict=False)
