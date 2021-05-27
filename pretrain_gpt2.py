@@ -195,8 +195,10 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
         {
             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": args.weight_decay,
+            "names": [n for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
         },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0,
+            "names": [n for n, p in model.named_parameters() if any(nd in n for nd in no_decay)]},
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
@@ -263,6 +265,7 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
             model.train()
+            #outputs = model(inputs, masked_lm_labels=labels, use_cache=False) if args.mlm else model(inputs, labels=labels, use_cache=False)
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
 
@@ -298,11 +301,11 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                             logger.info("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
-                    logger.info(
-                            f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
+                    #logger.info(
+                    #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     logger.info(
-                            f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}')
+                            f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
                     logging_loss = tr_loss
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -328,6 +331,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
                 break
+            if global_step == 10:#0 and args.run_on_moreh:
+                assert False
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
             break
@@ -399,6 +404,7 @@ def evaluate(args, model, tokenizer, prefix="") -> Dict:
 
 
 def main():
+    #torch.set_printoptions(profile='full')
     parser = argparse.ArgumentParser()
 
     # Required parameters
@@ -605,7 +611,10 @@ def main():
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
 
-    config = GPT2Config(vocab_size=52000, resid_pdrop=0.0, embd_pdrop=0.0, attn_pdrop=0.0)
+    config = GPT2Config(vocab_size=52000,
+                        resid_pdrop=0.0,
+                        embd_pdrop=0.0,
+                        attn_pdrop=0.0)
     
     from new_tokenizer import MyTokenizer
     vocab_file_path = 'tokenizer/vocab.json'
