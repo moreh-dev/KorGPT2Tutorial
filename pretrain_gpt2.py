@@ -88,12 +88,11 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
 
 
 def set_seed(args):
-    ## FIXME
-    #random.seed(args.seed)
-    #np.random.seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    #if args.n_gpu > 0:
-    #    torch.cuda.manual_seed_all(args.seed)
+    if args.n_gpu > 0:
+        torch.cuda.manual_seed_all(args.seed)
 
 
 def _sorted_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -> List[str]:
@@ -195,10 +194,13 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
         {
             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": args.weight_decay,
-            "names": [n for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "names": [n for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)]
         },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0,
-            "names": [n for n, p in model.named_parameters() if any(nd in n for nd in no_decay)]},
+        {
+            "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 
+            "weight_decay": 0.0,
+            "names": [n for n, p in model.named_parameters() if any(nd in n for nd in no_decay)]
+        },
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
@@ -212,10 +214,9 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
-    #FIXME
     # multi-gpu training (should be after apex fp16 initialization)
-    #if args.n_gpu > 1:
-    #    model = torch.nn.DataParallel(model)
+    if args.n_gpu > 1:
+        model = torch.nn.DataParallel(model)
 
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
@@ -252,10 +253,15 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
         epochs_trained, int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]
     )
     set_seed(args)  # Added here for reproducibility
-    for i in train_iterator:
+    for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
-
+            if step == 10: exit()
+            ####
+            print()
+            print("## iter:", step, "##")
+            print()
+            ####
             # Skip past any already trained steps if resuming training
             if steps_trained_in_current_epoch > 0:
                 steps_trained_in_current_epoch -= 1
@@ -265,12 +271,11 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
             model.train()
-            #outputs = model(inputs, masked_lm_labels=labels, use_cache=False) if args.mlm else model(inputs, labels=labels, use_cache=False)
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
 
-            #if args.n_gpu > 1:
-            #    loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            if args.n_gpu > 1:
+                loss = loss.mean()  # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 
@@ -331,8 +336,6 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
                 break
-            if global_step == 10:#0 and args.run_on_moreh:
-                assert False
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
             break
@@ -366,8 +369,8 @@ def evaluate(args, model, tokenizer, prefix="") -> Dict:
     )
 
     # multi-gpu evaluate
-    #if args.n_gpu > 1:
-    #    model = torch.nn.DataParallel(model)
+    if args.n_gpu > 1:
+        model = torch.nn.DataParallel(model)
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
@@ -404,7 +407,6 @@ def evaluate(args, model, tokenizer, prefix="") -> Dict:
 
 
 def main():
-    #torch.set_printoptions(profile='full')
     parser = argparse.ArgumentParser()
 
     # Required parameters
@@ -527,11 +529,6 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
-
-    ## MOREH
-    parser.add_argument(
-        "--run_on_moreh", action="store_true", help="Whether to run on Moreh framework."
-    )
     args = parser.parse_args()
 
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"] and not args.mlm:
@@ -584,10 +581,6 @@ def main():
 
     args.device = device
     #args.device = "cpu"
-
-    if args.run_on_moreh:
-        args.device = 'cuda'
-        args.n_gpu = int(os.environ['MOREH_NUM_DEVICES'])
 
     # Setup logging
     logging.basicConfig(
@@ -652,7 +645,6 @@ def main():
 
         global_step, tr_loss = train(args, train_dataset, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
-        print(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Saving best-practices: if you use save_pretrained for the model and tokenizer, you can reload them using from_pretrained()
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
