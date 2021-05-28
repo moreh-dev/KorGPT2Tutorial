@@ -256,7 +256,6 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
-            if step == 10: exit()
             ####
             print()
             print("## iter:", step, "##")
@@ -336,6 +335,10 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
                 break
+
+            if global_step == 10: 
+                exit()
+
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
             break
