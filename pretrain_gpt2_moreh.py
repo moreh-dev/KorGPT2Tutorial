@@ -92,8 +92,8 @@ def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    if args.n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
+    #if args.n_gpu > 0:
+    #    torch.cuda.manual_seed_all(args.seed)
 
 
 def _sorted_checkpoints(args, checkpoint_prefix="checkpoint", use_mtime=False) -> List[str]:
@@ -171,7 +171,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
 
-    args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
+    #args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
+    args.train_batch_size = args.per_gpu_train_batch_size * max(1, int(args.n_gpu))
 
     def collate(examples: List[torch.Tensor]):
         if tokenizer._pad_token is None:
@@ -216,8 +217,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
     # multi-gpu training (should be after apex fp16 initialization)
-    if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+    #if args.n_gpu > 1:
+    #    model = torch.nn.DataParallel(model)
 
     # Distributed training (should be after apex fp16 initialization)
     if args.local_rank != -1:
@@ -274,8 +275,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
 
-            if args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            #if args.n_gpu > 1:
+            #    loss = loss.mean()  # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 
@@ -582,8 +583,10 @@ def main():
 
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        args.n_gpu = 0 if args.no_cuda else torch.cuda.device_count()
+        #device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        #args.n_gpu = 0 if args.no_cuda else torch.cuda.device_count()
+        device = 'cuda'
+        args.n_gpu = os.environ['MOREH_NUM_DEVICES']
     else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
