@@ -13,6 +13,7 @@ import pickle
 import random
 import re
 import shutil
+import time
 from typing import Dict, List, Tuple
 
 
@@ -22,6 +23,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
+from tqdm.utils import disp_len
 
 
 from transformers import WEIGHTS_NAME, AdamW, GPT2Config, GPT2LMHeadModel, GPT2Tokenizer, get_linear_schedule_with_warmup
@@ -203,6 +205,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
         },
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    # optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
@@ -254,12 +258,14 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
     )
     set_seed(args)  # Added here for reproducibility
     for _ in train_iterator:
-        epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
-        for step, batch in enumerate(epoch_iterator):
+        # epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
+        time_start = time.time()
+        num_iter = len(train_dataloader)
+        for step, batch in enumerate(train_dataloader):
             ####
-            print()
-            print("## iter:", step, "##")
-            print()
+            # print()
+            # print("## iter:", step, "##")
+            # print()
             ####
             # Skip past any already trained steps if resuming training
             if steps_trained_in_current_epoch > 0:
@@ -270,7 +276,7 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
             model.train()
-            outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
+            outputs = model(inputs, masked_lm_labels=labels, use_cache=False) if args.mlm else model(inputs, labels=labels, use_cache=False)
             loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
 
             if args.n_gpu > 1:
@@ -284,12 +290,24 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             else:
                 loss.backward()
 
+            if (step + 1) % args.logging_steps == 0:
+                train_loss = loss.item()
+                batch_time = time.time() - time_start
+                time_start = time.time()
+                item_per_sec = args.logging_steps * args.train_batch_size / batch_time
+                report = (f'Iter: [{step+1:>5} /{num_iter:>5}] | '
+                        f'Loss: {train_loss:>8.3f} | '
+                        f'Speed: {item_per_sec:8.3f} item/sec')
+
+                print(report, flush=True)
+
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    # pass
                 optimizer.step()
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
@@ -303,7 +321,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                         results = evaluate(args, model, tokenizer)
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
-                            logger.info("eval_{}".format(key), value, global_step)
+                            # logger.info("eval_{}".format(key), value, global_step)
+                            logger.info(f'eval_{key}, {value}, {global_step}')
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     #logger.info(
                     #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
@@ -312,32 +331,32 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                             f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
                     logging_loss = tr_loss
 
-                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
-                    checkpoint_prefix = "checkpoint"
-                    # Save model checkpoint
-                    output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
-                    os.makedirs(output_dir, exist_ok=True)
-                    model_to_save = (
-                        model.module if hasattr(model, "module") else model
-                    )  # Take care of distributed/parallel training
-                    model_to_save.save_pretrained(output_dir)
-                    #tokenizer.save_pretrained(output_dir)
+                # if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                #     checkpoint_prefix = "checkpoint"
+                #     # Save model checkpoint
+                #     output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
+                #     os.makedirs(output_dir, exist_ok=True)
+                #     model_to_save = (
+                #         model.module if hasattr(model, "module") else model
+                #     )  # Take care of distributed/parallel training
+                #     model_to_save.save_pretrained(output_dir)
+                #     #tokenizer.save_pretrained(output_dir)
 
-                    torch.save(args, os.path.join(output_dir, "training_args.bin"))
-                    logger.info("Saving model checkpoint to %s", output_dir)
+                #     torch.save(args, os.path.join(output_dir, "training_args.bin"))
+                #     logger.info("Saving model checkpoint to %s", output_dir)
 
-                    _rotate_checkpoints(args, checkpoint_prefix)
+                #     _rotate_checkpoints(args, checkpoint_prefix)
 
-                    torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                    torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                    logger.info("Saving optimizer and scheduler states to %s", output_dir)
+                #     torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                #     torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
+                #     logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
-            if args.max_steps > 0 and global_step > args.max_steps:
-                epoch_iterator.close()
-                break
+            # if args.max_steps > 0 and global_step > args.max_steps:
+            #     epoch_iterator.close()
+            #     break
 
-            if global_step == 10: 
-                exit()
+            # if global_step == 10: 
+            #     exit()
 
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
@@ -389,7 +408,7 @@ def evaluate(args, model, tokenizer, prefix="") -> Dict:
         labels = labels.to(args.device)
 
         with torch.no_grad():
-            outputs = model(inputs, masked_lm_labels=labels) if args.mlm else model(inputs, labels=labels)
+            outputs = model(inputs, masked_lm_labels=labels, use_cache=False) if args.mlm else model(inputs, labels=labels, use_cache=False)
             lm_loss = outputs[0]
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
