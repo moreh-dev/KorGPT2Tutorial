@@ -313,23 +313,23 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                 model.zero_grad()
                 global_step += 1
 
-                # if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                #     # Log metrics
-                #     if (
-                #         args.local_rank == -1 and args.evaluate_during_training
-                #     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                #         results = evaluate(args, model, tokenizer)
-                #         for key, value in results.items():
-                #             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
-                #             # logger.info("eval_{}".format(key), value, global_step)
-                #             logger.info(f'eval_{key}, {value}, {global_step}')
-                #     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
-                #     #logger.info(
-                #     #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
-                #     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
-                #     logger.info(
-                #             f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
-                #     logging_loss = tr_loss
+                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                    # Log metrics
+                    if (
+                        args.local_rank == -1 and args.evaluate_during_training
+                    ):  # Only evaluate when single GPU otherwise metrics may not average well
+                        results = evaluate(args, model, tokenizer)
+                        for key, value in results.items():
+                            tb_writer.add_scalar("eval_{}".format(key), value, global_step)
+                            # logger.info("eval_{}".format(key), value, global_step)
+                            logger.info(f'eval_{key}, {value}, {global_step}')
+                    tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
+                    #logger.info(
+                    #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
+                    tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
+                    logger.info(
+                            f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
+                    logging_loss = tr_loss
 
                 # if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                 #     checkpoint_prefix = "checkpoint"
