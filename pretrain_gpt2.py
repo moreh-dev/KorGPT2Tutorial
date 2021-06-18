@@ -181,7 +181,7 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
 
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = DataLoader(
-        train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, collate_fn=collate
+        train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, collate_fn=collate, drop_last=True
     )
 
     if args.max_steps > 0:
@@ -204,8 +204,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             "names": [n for n, p in model.named_parameters() if any(nd in n for nd in no_decay)]
         },
     ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    # optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    # optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
@@ -271,7 +271,7 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             if steps_trained_in_current_epoch > 0:
                 steps_trained_in_current_epoch -= 1
                 continue
-
+            
             inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
@@ -313,23 +313,23 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                 model.zero_grad()
                 global_step += 1
 
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                    # Log metrics
-                    if (
-                        args.local_rank == -1 and args.evaluate_during_training
-                    ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results = evaluate(args, model, tokenizer)
-                        for key, value in results.items():
-                            tb_writer.add_scalar("eval_{}".format(key), value, global_step)
-                            # logger.info("eval_{}".format(key), value, global_step)
-                            logger.info(f'eval_{key}, {value}, {global_step}')
-                    tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
-                    #logger.info(
-                    #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
-                    tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
-                    logger.info(
-                            f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
-                    logging_loss = tr_loss
+                # if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                #     # Log metrics
+                #     if (
+                #         args.local_rank == -1 and args.evaluate_during_training
+                #     ):  # Only evaluate when single GPU otherwise metrics may not average well
+                #         results = evaluate(args, model, tokenizer)
+                #         for key, value in results.items():
+                #             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
+                #             # logger.info("eval_{}".format(key), value, global_step)
+                #             logger.info(f'eval_{key}, {value}, {global_step}')
+                #     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
+                #     #logger.info(
+                #     #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
+                #     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
+                #     logger.info(
+                #             f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
+                #     logging_loss = tr_loss
 
                 # if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                 #     checkpoint_prefix = "checkpoint"
@@ -387,7 +387,7 @@ def evaluate(args, model, tokenizer, prefix="") -> Dict:
 
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(
-        eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, collate_fn=collate
+        eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, collate_fn=collate, drop_last=True
     )
 
     # multi-gpu evaluate
@@ -406,7 +406,6 @@ def evaluate(args, model, tokenizer, prefix="") -> Dict:
         inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
         inputs = inputs.to(args.device)
         labels = labels.to(args.device)
-
         with torch.no_grad():
             outputs = model(inputs, masked_lm_labels=labels, use_cache=False) if args.mlm else model(inputs, labels=labels, use_cache=False)
             lm_loss = outputs[0]
@@ -632,8 +631,8 @@ def main():
                         attn_pdrop=0.0)
     
     from new_tokenizer import MyTokenizer
-    vocab_file_path = 'tokenizer/vocab.json'
-    merge_file_path = 'tokenizer/merges.txt'
+    vocab_file_path = 'tokenizer/vocab_moreh_12g.json'
+    merge_file_path = 'tokenizer/merges_moreh_12g.txt'
     tokenizer = MyTokenizer(vocab_file_path, merge_file_path)
     
 

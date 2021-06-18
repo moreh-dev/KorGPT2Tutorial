@@ -1,15 +1,16 @@
-MOREH_NUM_DEVICES=8 MOREH_EXEC_INTERVAL=5000 python pretrain_gpt2.py \
-  --do_train \
-  --model_type=gpt2 \
-  --train_data_file=/home/share/dataset/GPT2_12G/tinyDedup.txt \
-  --num_train_epochs=3 \
-  --output_dir=extend_kogpt2_test_moreh_12g \
-  --overwrite_output_dir \
-  --per_gpu_train_batch_size=16 \
-  --per_gpu_eval_batch_size=16 \
-  --save_steps=0 \
-  --eval_data_file=/home/share/KorGPT2/summary_data/sample_news_data.txt \
-  --logging_steps=1 \
-  --evaluate_during_training \
+# MOREH_NUM_DEVICES=6 MOREH_EXEC_INTERVAL=5000 python pretrain_gpt2.py \
+#   --do_train \
+#   --model_type=gpt2 \
+#   --train_data_file=/home/share/dataset/GPT2_12G/tinyDedup.txt \
+#   --num_train_epochs=3 \
+#   --output_dir=extend_kogpt2_test_moreh_12g \
+#   --overwrite_output_dir \
+#   --per_gpu_train_batch_size=6 \
+#   --per_gpu_eval_batch_size=6 \
+#   --save_steps=0 \
+#   --eval_data_file=/home/share/KorGPT2/summary_data/sample_news_data.txt \
+#   --logging_steps=5 \
+#   --evaluate_during_training \
 
 # MOREH_NUM_DEVICES=8 MOREH_EXEC_INTERVAL=5000 python pretrain_gpt2.py --do_train --model_type=gpt2 --train_data_file=/home/share/dataset/GPT2_4G/data.txt --num_train_epochs=1 --output_dir=extend_kogpt2_test --overwrite_output_dir --per_gpu_train_batch_size=16 --logging_steps=10
+MOREH_NUM_DEVICES=8 MOREH_EXEC_INTERVAL=5000 python pretrain_gpt2.py --do_train --model_type=gpt2 --train_data_file=/home/share/dataset/GPT2_12G/tinyDedup.txt --num_train_epochs=1 --output_dir=extend_kogpt2_test --overwrite_output_dir --per_gpu_train_batch_size=16 --logging_steps=10
