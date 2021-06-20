@@ -625,10 +625,7 @@ def main():
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Barrier to make sure only the first process in distributed training download model & vocab
 
-    config = GPT2Config(vocab_size=52000,
-                        resid_pdrop=0.0,
-                        embd_pdrop=0.0,
-                        attn_pdrop=0.0)
+    config = GPT2Config(vocab_size=52000)
     
     from new_tokenizer import MyTokenizer
     vocab_file_path = 'tokenizer/vocab_moreh_12g.json'
