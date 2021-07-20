@@ -247,7 +247,9 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
     steps_trained_in_current_epoch = 0
 
 
-    tr_loss, logging_loss = 0.0, 0.0
+    #tr_loss, logging_loss = 0.0, 0.0
+    tr_loss = torch.tensor(0.0).cuda()
+    logging_loss = torch.tensor(0.0).cuda()
 
     model_to_resize = model.module if hasattr(model, "module") else model  # Take care of distributed/parallel training
     model_to_resize.resize_token_embeddings(tokenizer.get_vocab_size())
@@ -290,18 +292,19 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
             else:
                 loss.backward()
 
-            if (step + 1) % args.logging_steps == 0:
-                train_loss = loss.item()
-                batch_time = time.time() - time_start
-                time_start = time.time()
-                item_per_sec = args.logging_steps * args.train_batch_size / batch_time
-                report = (f'Iter: [{step+1:>5} /{num_iter:>5}] | '
-                        f'Loss: {train_loss:>8.3f} | '
-                        f'Speed: {item_per_sec:8.3f} item/sec')
+            #if (step + 1) % args.logging_steps == 0:
+            #    train_loss = loss.item()
+            #    batch_time = time.time() - time_start
+            #    time_start = time.time()
+            #    item_per_sec = args.logging_steps * args.train_batch_size / batch_time
+            #    report = (f'Iter: [{step+1:>5} /{num_iter:>5}] | '
+            #            f'Loss: {train_loss:>8.3f} | '
+            #            f'Speed: {item_per_sec:8.3f} item/sec')
 
-                print(report, flush=True)
+            #    print(report, flush=True)
 
             # tr_loss += loss.item()
+            tr_loss.add_(loss)
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
@@ -313,43 +316,48 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                 model.zero_grad()
                 global_step += 1
 
-                # if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                #     # Log metrics
-                #     if (
-                #         args.local_rank == -1 and args.evaluate_during_training
-                #     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                #         results = evaluate(args, model, tokenizer)
-                #         for key, value in results.items():
-                #             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
-                #             # logger.info("eval_{}".format(key), value, global_step)
-                #             logger.info(f'eval_{key}, {value}, {global_step}')
-                #     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
-                #     #logger.info(
-                #     #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
-                #     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
-                #     logger.info(
-                #             f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
-                #     logging_loss = tr_loss
+                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                    # Log metrics
+                    #if (
+                    #    args.local_rank == -1 and args.evaluate_during_training
+                    #):  # Only evaluate when single GPU otherwise metrics may not average well
+                    #    results = evaluate(args, model, tokenizer)
+                    #    for key, value in results.items():
+                    #        tb_writer.add_scalar("eval_{}".format(key), value, global_step)
+                    #        # logger.info("eval_{}".format(key), value, global_step)
+                    #        logger.info(f'eval_{key}, {value}, {global_step}')
+                    #tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
+                    #logger.info(
+                    #        f'lr : {scheduler.get_lr()[0]} @ global_step : {global_step}')
+                    #tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
+                    #logger.info(
+                    #        f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
 
-                # if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
-                #     checkpoint_prefix = "checkpoint"
-                #     # Save model checkpoint
-                #     output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
-                #     os.makedirs(output_dir, exist_ok=True)
-                #     model_to_save = (
-                #         model.module if hasattr(model, "module") else model
-                #     )  # Take care of distributed/parallel training
-                #     model_to_save.save_pretrained(output_dir)
-                #     #tokenizer.save_pretrained(output_dir)
+                    elapsed = time.time() - time_start
+                    loss_to_report = ((tr_loss - logging_loss) / args.logging_steps).item()
+                    logger.info(f'loss : {loss_to_report} @ global_step : {global_step}'
+                                f' time_elapsed = {elapsed}\n')
+                    logging_loss = tr_loss
 
-                #     torch.save(args, os.path.join(output_dir, "training_args.bin"))
-                #     logger.info("Saving model checkpoint to %s", output_dir)
+                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                    checkpoint_prefix = "checkpoint"
+                    # Save model checkpoint
+                    output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
+                    os.makedirs(output_dir, exist_ok=True)
+                    model_to_save = (
+                        model.module if hasattr(model, "module") else model
+                    )  # Take care of distributed/parallel training
+                    model_to_save.save_pretrained(output_dir)
+                    #tokenizer.save_pretrained(output_dir)
 
-                #     _rotate_checkpoints(args, checkpoint_prefix)
+                    torch.save(args, os.path.join(output_dir, "training_args.bin"))
+                    logger.info("Saving model checkpoint to %s", output_dir)
 
-                #     torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                #     torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                #     logger.info("Saving optimizer and scheduler states to %s", output_dir)
+                    _rotate_checkpoints(args, checkpoint_prefix)
+
+                    torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                    torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
+                    logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
             # if args.max_steps > 0 and global_step > args.max_steps:
             #     epoch_iterator.close()
