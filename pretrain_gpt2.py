@@ -332,14 +332,16 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                     #tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     #logger.info(
                     #        f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
+                    #logging_loss = tr_loss
 
                     elapsed = time.time() - time_start
                     loss_to_report = ((tr_loss - logging_loss) / args.logging_steps).item()
-                    logger.info(f'loss : {loss_to_report} @ global_step : {global_step}'
-                                f' time_elapsed = {elapsed}\n')
-                    logging_loss = tr_loss
+                    logger.info(f'loss : {loss_to_report:8.3f} | iter : {global_step:>5}/{num_iter:>5} |'
+                            f' time_elapsed = {elapsed:10.3f} s | {global_step/elapsed:8.3f} it/s')
+                    logging_loss.copy_(tr_loss)
 
-                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                #if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                if args.local_rank in [-1, 0] and global_step % num_iter == 0:
                     checkpoint_prefix = "checkpoint"
                     # Save model checkpoint
                     output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
@@ -670,7 +672,8 @@ def main():
             torch.distributed.barrier()
 
         global_step, tr_loss = train(args, train_dataset, model, tokenizer)
-        logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+        #logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
+        logger.info(f' global_step = {global_step}, average loss = {tr_loss.item()}')
 
     # Saving best-practices: if you use save_pretrained for the model and tokenizer, you can reload them using from_pretrained()
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
