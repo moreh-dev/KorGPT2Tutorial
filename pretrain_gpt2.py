@@ -334,8 +334,8 @@ def train(args, train_dataset, model, tokenizer) -> Tuple[int, float]:
                     #        f'loss : {(tr_loss - logging_loss) / args.logging_steps} @ global_step : {global_step}\n')
                     #logging_loss = tr_loss
 
-                    elapsed = time.time() - time_start
                     loss_to_report = ((tr_loss - logging_loss) / args.logging_steps).item()
+                    elapsed = time.time() - time_start
                     logger.info(f'loss : {loss_to_report:8.3f} | iter : {global_step:>5}/{num_iter:>5} |'
                             f' time_elapsed = {elapsed:10.3f} s | {global_step/elapsed:8.3f} it/s')
                     logging_loss.copy_(tr_loss)
